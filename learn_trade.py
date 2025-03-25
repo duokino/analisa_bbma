@@ -129,7 +129,7 @@ def modify_trade(tp, sl):
 
 def countdown_timer(seconds):
     for remaining in range(seconds, 0, -1):
-        print(f"{Fore.YELLOW}Waiting for next analysis: {remaining} seconds...{Style.RESET_ALL}", end="\r", flush=True)
+        print(f"{Fore.YELLOW}Next analysis will be in {remaining} seconds...{Style.RESET_ALL}", end="\r", flush=True)
         time.sleep(1)
     print("\n")
 
