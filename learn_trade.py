@@ -62,7 +62,7 @@ def record_trade(entry_price, tp, sl):
         history_orders = mt5.history_deals_get(position=open_trade)
         if history_orders:
             break
-        time.sleep(5)
+        time.sleep(30)
     
     # Check if trade hit TP or SL
     for deal in history_orders:
