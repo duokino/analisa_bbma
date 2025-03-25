@@ -17,7 +17,7 @@ colorama.init(autoreset=True)
 mt5.initialize()
 
 # User Input
-symbol = input("Enter currency pair (e.g., EURUSD, XAUUSD, BTCUSD): ").strip().upper()
+symbol = input("Enter currency pair (e.g., EURUSD): ").strip().upper()
 timeframes = {'M1': mt5.TIMEFRAME_M1, 'M5': mt5.TIMEFRAME_M5, 'M15': mt5.TIMEFRAME_M15, 'H1': mt5.TIMEFRAME_H1, 'H4': mt5.TIMEFRAME_H4, 'D1': mt5.TIMEFRAME_D1}
 num_candles = 1000
 
@@ -56,13 +56,33 @@ def analyze_bbma(df):
     df.loc[df['Reentry'] & (~df['Momentum']), 'Signal'] = 'Sell'
     return df
 
-def record_trade(entry_price, tp, sl):
+def record_trade():
+    # Fetch latest trade history from MetaTrader 5
+    history_orders = mt5.history_deals_get(time_from=0, time_to=time.time())
+    if not history_orders:
+        print("No trade history found.")
+        return
+    
+    latest_trade = history_orders[-1]  # Get the most recent trade
+    trade_type = 'BUY' if latest_trade.type == mt5.ORDER_TYPE_BUY else 'SELL'
+    entry_price = latest_trade.price_open
+    tp = latest_trade.price_tp
+    sl = latest_trade.price_sl
+    result = 'win' if latest_trade.profit > 0 else 'loss'
+    
+    os.makedirs('data', exist_ok=True)
+    trade_data = pd.DataFrame([[trade_type, entry_price, tp, sl, result]], 
+                               columns=['Trade Type', 'Entry Price', 'TP', 'SL', 'Result'])
+    if os.path.exists(trade_history_file):
+        trade_data.to_csv(trade_history_file, mode='a', header=False, index=False)
+    else:
+        trade_data.to_csv(trade_history_file, mode='w', header=True, index=False)
     # Wait for trade to close
     while True:
         history_orders = mt5.history_deals_get(position=open_trade)
         if history_orders:
             break
-        time.sleep(30)
+        time.sleep(5)
     
     # Check if trade hit TP or SL
     for deal in history_orders:
@@ -102,14 +122,14 @@ def modify_trade(tp, sl):
     }
     result = mt5.order_send(request)
     if result.retcode == mt5.TRADE_RETCODE_DONE:
-        print(f"{Fore.CYAN}Updated TP: {tp}, SL: {sl} for open trade.{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}Updated TP: {tp}, SL: {sl} for open trade.{Style.RESET_ALL}")
     else:
         print(f"{Fore.RED}Failed to update TP/SL. Retcode: {result.retcode}{Style.RESET_ALL}")
         print(f"{Fore.RED}Last Error: {mt5.last_error()}{Style.RESET_ALL}")
 
 def countdown_timer(seconds):
     for remaining in range(seconds, 0, -1):
-        print(f"{Fore.YELLOW}Next analysis: {remaining} seconds...{Style.RESET_ALL}", end="\r", flush=True)
+        print(f"{Fore.YELLOW}Waiting for next analysis: {remaining} seconds...{Style.RESET_ALL}", end="\r", flush=True)
         time.sleep(1)
     print("\n")
 
@@ -128,7 +148,7 @@ while True:
         df = analyze_bbma(df)
         signals[tf_name] = df['Signal'].iloc[-1]
     
-    print(f"Signals:", signals)
+    print("Signals:", signals)
     print(f"Suggested TP: {tp if tp else 'N/A'}, Suggested SL: {sl if sl else 'N/A'}")
     print(f"Suggested TP: {tp}, Suggested SL: {sl}")
     
@@ -177,11 +197,11 @@ while True:
         if result.retcode == mt5.TRADE_RETCODE_DONE:
             open_trade = result.order
             print(f"{Fore.GREEN}Trade executed successfully!{Style.RESET_ALL}")
-            record_trade(entry_price, tp, sl)
+            record_trade()
         else:
-            print(f"Trade execution failed. Retcode: {result.retcode}")
-            print(f"Last Error: {mt5.last_error()}")
+            print(f"{Fore.RED}Trade execution failed. Retcode: {result.retcode}{Style.RESET_ALL}")
+            print(f"{Fore.RED}Last Error: {mt5.last_error()}{Style.RESET_ALL}")
     
     retrain_model()
-    print(f"Waiting for the next analysis cycle...")
+    print("Waiting for the next analysis cycle...")
     countdown_timer(60)
